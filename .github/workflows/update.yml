@@ -1,0 +1,45 @@
+name: Update DoD awards
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 11 * * *" # daily 11:15 UTC (adjust as you like)
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run collector
+        env:
+          DAYS_BACK: "7"
+          PAGE_LIMIT: "500"
+          OUT_SQLITE: "data/contracts.sqlite"
+          OUT_JSON: "data/contracts_latest.json"
+          OUT_CSV: "data/contracts_latest.csv"
+        run: |
+          python -m src.main
+          ls -la data || true
+
+      - name: Commit outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/contracts.sqlite data/contracts_latest.json data/contracts_latest.csv || true
+          git commit -m "Update DoD awards snapshot" || echo "No changes to commit"
+          git push
