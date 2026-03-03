@@ -4,9 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from src.collectors.usaspending import USAspendingConfig, fetch_dod_awards
-from src.normalize import normalize_usaspending
-from src.storage import upsert_awards, read_latest, write_csv, write_json
+from src.collectors.usaspending_contracts import fetch_usaspending_dod_contracts, normalize
 
 
 def env_int(name: str, default: int) -> int:
@@ -21,27 +19,16 @@ def env_int(name: str, default: int) -> int:
 
 def main() -> None:
     days_back = env_int("DAYS_BACK", 7)
-    page_limit = env_int("PAGE_LIMIT", 500)
+    limit = env_int("LIMIT", 100)
 
-    out_sqlite = Path(os.getenv("OUT_SQLITE", "data/contracts.sqlite"))
     out_json = Path(os.getenv("OUT_JSON", "data/contracts_latest.json"))
-    out_csv = Path(os.getenv("OUT_CSV", "data/contracts_latest.csv"))
 
-    cfg = USAspendingConfig(days_back=days_back, page_limit=page_limit)
+    records = fetch_usaspending_dod_contracts(days_back=days_back, limit=limit)
+    normalized = normalize(records)
 
-    raw = fetch_dod_awards(cfg)
-    normalized = normalize_usaspending(raw)
-
-    changed = upsert_awards(out_sqlite, normalized)
-    latest = read_latest(out_sqlite, limit=2000)
-
-    write_json(out_json, latest)
-    write_csv(out_csv, latest)
-
-    print(f"Fetched raw: {len(raw)}")
-    print(f"Normalized: {len(normalized)}")
-    print(f"Upsert affected rows: {changed}")
-    print(f"Wrote: {out_sqlite} / {out_json} / {out_csv}")
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(__import__("json").dumps(normalized, indent=2), encoding="utf-8")
+    print(f"Wrote {len(normalized)} records to {out_json}")
 
 
 if __name__ == "__main__":
